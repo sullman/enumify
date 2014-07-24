@@ -14,6 +14,10 @@ def set_database
     t.string :status
     t.references :model
   end
+
+  connection.create_table :locales do |t|
+    t.string :locale
+  end
 end
 
 set_database

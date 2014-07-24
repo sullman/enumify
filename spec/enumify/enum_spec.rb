@@ -24,12 +24,21 @@ class ModelAllowingNil < ActiveRecord::Base
   enum :status, [:active, :expired, :not_expired], :allow_nil => true
 end
 
+class ModelWithMethodPrefix < ActiveRecord::Base
+  self.table_name = 'locales'
+
+  extend Enumify::Model
+
+  enum :locale, [:en, :es, :fr], :method_prefix => 'loc'
+end
+
 
 describe :Enumify do
 
   before(:each) do
     Model.delete_all
     OtherModel.delete_all
+    ModelWithMethodPrefix.delete_all
 
     @obj = Model.create!(:status => :available)
     @canceled_obj = Model.create!(:status => :canceled)
@@ -38,6 +47,11 @@ describe :Enumify do
     @active_obj = OtherModel.create!(:status => :active, :model => @obj)
     @expired_obj = OtherModel.create!(:status => :expired, :model => @canceled_obj)
     @not_expired_obj = OtherModel.create!(:status => :not_expired, :model => @canceled_obj)
+
+    @en_obj = ModelWithMethodPrefix.create!(:locale => :en)
+    @es_obj = ModelWithMethodPrefix.create!(:locale => :es)
+    @fr_obj = ModelWithMethodPrefix.create!(:locale => :fr)
+    @obj_with_prefix = ModelWithMethodPrefix.create!(:locale => :fr)
   end
 
   describe "allow nil" do
@@ -112,6 +126,22 @@ describe :Enumify do
         @obj.respond_to?("#{val}!").should be_true
       end
     end
+
+    describe "with prefix" do
+      it "should use prefix" do
+        ModelWithMethodPrefix::LOCALES.each do |val|
+          @obj_with_prefix.respond_to?("loc_#{val}?").should be_true
+          @obj_with_prefix.respond_to?("loc_#{val}!").should be_true
+        end
+      end
+
+      it "should not respond to unprefixed methods" do
+        ModelWithMethodPrefix::LOCALES.each do |val|
+          @obj_with_prefix.respond_to?("#{val}?").should be_false
+          @obj_with_prefix.respond_to?("#{val}!").should be_false
+        end
+      end
+    end
   end
 
   describe "getting value" do
@@ -119,6 +149,14 @@ describe :Enumify do
       @obj.status.should == :available
       @obj.status = "canceled"
       @obj.status.should == :canceled
+    end
+
+    describe "with prefix" do
+      it "should not use prefix" do
+        @obj_with_prefix.locale.should == :fr
+        @obj_with_prefix.locale = :en
+        @obj_with_prefix.locale.should == :en
+      end
     end
 
   end
@@ -132,6 +170,13 @@ describe :Enumify do
     it "should except values as string" do
       @obj.status = "canceled"
       @obj.canceled?.should be_true
+    end
+
+    describe "with prefix" do
+      it "should not use prefix" do
+        @obj_with_prefix.locale = :en
+        @obj_with_prefix.loc_en?.should be_true
+      end
     end
   end
 
@@ -176,6 +221,13 @@ describe :Enumify do
 
     it "should return objects with given value when joined with models who have the same enum field" do
       OtherModel.joins(:model).active.should == [@active_obj]
+    end
+
+    describe "with prefix" do
+      it "should use prefix and return objects with given value" do
+        ModelWithMethodPrefix.loc_en.should == [@en_obj]
+        ModelWithMethodPrefix.loc_es.should == [@es_obj]
+      end
     end
 
     describe "negation scopes" do

@@ -4,6 +4,12 @@ module Enumify
 
       validates_inclusion_of parameter, :in => vals, :allow_nil => !!opts[:allow_nil]
 
+      if opts[:method_prefix].present?
+        method_prefix = "#{opts[:method_prefix]}_"
+      else
+        method_prefix = ""
+      end
+
       const_set("#{parameter.to_s.pluralize.upcase}", vals)
 
       define_method "#{parameter.to_s}" do
@@ -33,17 +39,18 @@ module Enumify
       end
 
       vals.each do |val|
-        raise "Collision in enum values method #{val}" if respond_to?("#{val.to_s}?") or respond_to?("#{val.to_s}!") or respond_to?("#{val.to_s}")
+        full_name = "#{method_prefix}#{val}"
+        raise "Collision in enum values method #{full_name}" if respond_to?("#{full_name.to_s}?") or respond_to?("#{full_name.to_s}!") or respond_to?("#{full_name.to_s}")
 
-        define_method "#{val.to_s}?" do
+        define_method "#{full_name.to_s}?" do
           send("#{parameter.to_s}") == val
         end
 
-        define_method "#{val.to_s}!" do
+        define_method "#{full_name.to_s}!" do
           send("_set_#{parameter.to_s}", val, true)
         end
 
-        scope val.to_sym, lambda { where(parameter.to_sym => val.to_s) }
+        scope full_name.to_sym, lambda { where(parameter.to_sym => val.to_s) }
       end
 
       # We want to first define all the "positive" scopes and only then define
@@ -52,8 +59,9 @@ module Enumify
         # We need to prefix the field with the table name since if this scope will
         # be used in a joined query with other models that have the same enum field then
         # it will fail on ambiguous column name.
-        unless respond_to?("not_#{val}")
-          scope "not_#{val}", lambda { where("#{self.table_name}.#{parameter} != ?", val.to_s) }
+        full_name = "#{method_prefix}#{val}"
+        unless respond_to?("not_#{full_name}")
+          scope "not_#{full_name}", lambda { where("#{self.table_name}.#{parameter} != ?", val.to_s) }
         end
       end
 
